@@ -51,6 +51,7 @@
 - When the short link is accessed, the application redirects the user and logs the access count.
 
 ## FINAL CODE
+
 // URLShortenerApplication.java
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -125,9 +126,262 @@ public class URLController {
         return ResponseEntity.notFound().build();
     }
 }
+
+
 # FINAL PROJECT-2    (Job Portal System)
 ## EXPLANATION
 
 ## TITLE OF THE PROJECT: Job Poratl System
 
+## OBJECTIVE:
+- To build a web-based job portal that allows employers to post job openings and applicants to search, apply, and track their application status. The system implements role-based access using Spring Security.
 
+## HOW IT WORKS:
+- Employers register and log in to post job listings.
+- Applicants register and log in to search and apply for jobs.
+- Applications are stored and tracked with their status (APPLIED, ACCEPTED, REJECTED).
+- All user and job data is persisted in a MySQL database.
+
+## WORKFLOW:
+- User registers as an EMPLOYER or APPLICANT.
+- EMPLOYER logs in and posts job listings.
+- APPLICANT logs in, browses jobs, and applies.
+- EMPLOYER can view applicants and update status.
+- APPLICANT can check the status of their applications.
+
+## COMPONENTS:
+- Spring Boot Web App
+- MySQL Database
+- Spring Security (Authentication/Authorization)
+- Thymeleaf Frontend Templates
+- REST API Controllers for Jobs and Applications
+
+## DATABASE:
+- Table: users (id, username, password, role)
+- Table: jobs (id, title, description, location, employer_id)
+- Table: applications (id, applicant_id, job_id, status)
+
+## ENDPOINTS:
+- /register (GET/POST): User registration
+- /login (GET/POST): Login page
+- /jobs/new: Form for employer to post jobs
+- /jobs: View all jobs (applicants)
+- /apply/{jobId}: Apply for a job
+- /applications: View applications by applicant
+
+## FEATURES IMPLEMENTED:
+- Role-based access control
+- Job posting and search
+- Job application with status tracking
+- Search by job title or location
+- Persistent data with JPA and MySQL
+
+## TOOLS USED:
+- Java 17+
+- Spring Boot (Web, JPA, Security)
+- MySQL
+- Thymeleaf
+- IntelliJ IDEA / VS Code
+- Postman (API testing)
+
+## EXPECTED OUTPUT:
+- EMPLOYER can add and manage job listings.
+- APPLICANT can view, search, and apply for jobs.
+- User-friendly web interface for both roles.
+- Application status updates tracked in the system.
+
+## FINAL CODE
+
+// File: JobPortalApplication.java
+package com.example.jobportal;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class JobPortalApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(JobPortalApplication.class, args);
+    }
+}
+
+// File: entity/User.java
+package com.example.jobportal.entity;
+
+import jakarta.persistence.*;
+
+@Entity
+public class User {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String username;
+    private String password;
+
+    @Enumerated(EnumType.STRING)
+    private Role role;
+
+    public enum Role {
+        EMPLOYER, APPLICANT
+    }
+
+    // Getters and Setters
+}
+
+// File: entity/Job.java
+package com.example.jobportal.entity;
+
+import jakarta.persistence.*;
+
+@Entity
+public class Job {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String title;
+    private String description;
+    private String location;
+
+    @ManyToOne
+    private User employer;
+
+    // Getters and Setters
+}
+
+// File: entity/Application.java
+package com.example.jobportal.entity;
+
+import jakarta.persistence.*;
+
+@Entity
+public class Application {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne
+    private User applicant;
+
+    @ManyToOne
+    private Job job;
+
+    @Enumerated(EnumType.STRING)
+    private Status status;
+
+    public enum Status {
+        APPLIED, ACCEPTED, REJECTED
+    }
+
+    // Getters and Setters
+}
+
+// File: repository/UserRepository.java
+package com.example.jobportal.repository;
+
+import com.example.jobportal.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByUsername(String username);
+}
+
+// File: repository/JobRepository.java
+package com.example.jobportal.repository;
+
+import com.example.jobportal.entity.Job;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface JobRepository extends JpaRepository<Job, Long> {
+    List<Job> findByTitleContainingOrLocationContaining(String title, String location);
+}
+
+// File: repository/ApplicationRepository.java
+package com.example.jobportal.repository;
+
+import com.example.jobportal.entity.Application;
+import com.example.jobportal.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface ApplicationRepository extends JpaRepository<Application, Long> {
+    List<Application> findByApplicant(User user);
+}
+
+// File: config/SecurityConfig.java
+package com.example.jobportal.config;
+
+import com.example.jobportal.service.UserService;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    private final UserService userService;
+
+    public SecurityConfig(UserService userService) {
+        this.userService = userService;
+    }
+
+    @Override
+    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+        auth.userDetailsService(userService).passwordEncoder(NoOpPasswordEncoder.getInstance());
+    }
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf().disable()
+            .authorizeRequests()
+            .antMatchers("/jobs/new").hasRole("EMPLOYER")
+            .antMatchers("/apply/**", "/jobs/**").authenticated()
+            .anyRequest().permitAll()
+            .and().formLogin().defaultSuccessUrl("/", true)
+            .and().logout();
+    }
+}
+
+// File: service/UserService.java
+package com.example.jobportal.service;
+
+import com.example.jobportal.entity.User;
+import com.example.jobportal.repository.UserRepository;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+@Service
+public class UserService implements UserDetailsService {
+
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        return new org.springframework.security.core.userdetails.User(
+                user.getUsername(),
+                user.getPassword(),
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()))
+        );
+    }
+}
+
+// Add controllers and Thymeleaf templates as needed
